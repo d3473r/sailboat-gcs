@@ -7,8 +7,8 @@
       label="Port"
       v-on:change="handleComPortChange"
     ></v-select>
-    <v-heading :size="350" :heading="heading" />
-    <v-attitude :size="350" :pitch="pitch" :roll="roll" />
+    <v-heading :size="200" :heading="heading" />
+    <v-attitude :size="200" :pitch="pitch" :roll="roll" />
     <v-snackbar v-model="snackbar['enabled']" :color="snackbar['color']">{{ snackbar['message'] }}</v-snackbar>
   </v-container>
 </template>
@@ -18,14 +18,14 @@ import Vue from "vue";
 import { Component } from "vue-property-decorator";
 import { MAVLinkModule, MAVLinkMessage } from "@ifrunistuttgart/node-mavlink";
 
-import { messageRegistry } from "../assets/mavlink/message-registry";
-
 import Serialport, { PortInfo } from "serialport";
-import { Heartbeat } from "@/assets/mavlink/messages/heartbeat";
-import { RadioStatus } from "@/assets/mavlink/messages/radio-status";
+import { messageRegistry } from "../assets/mavlink/message-registry";
 
 /* eslint-disable */
 import { Heading, Attitude } from "vue-flight-indicators";
+import { Heartbeat } from '@/assets/mavlink/messages/heartbeat';
+import { RadioStatus } from '@/assets/mavlink/messages/radio-status';
+import { BoatStatus } from '@/assets/mavlink/messages/boat-status';
 /* eslint-enable */
 
 Vue.component("v-heading", Heading);
@@ -123,11 +123,10 @@ export default class SailboatGcs extends Vue {
 
     this.mavLink.on("RADIO_STATUS", (message: RadioStatus) => {});
 
-    this.mavLink.on("ATTITUDE", (message: Attitude) => {
-      this.$store.commit("setHeading", degrees(message.yaw));
-      console.log(degrees(message.yaw));
-      this.$store.commit("setPitch", degrees(message.pitch));
-      this.$store.commit("setRoll", degrees(message.roll));
+    this.mavLink.on("BOAT_STATUS", (message: BoatStatus) => {
+      this.$store.commit("setHeading", message.heading);
+      this.$store.commit("setPitch", message.pitch);
+      this.$store.commit("setRoll", message.roll);
     });
   }
 
