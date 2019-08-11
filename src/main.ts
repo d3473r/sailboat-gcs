@@ -11,7 +11,9 @@ const store = new Vuex.Store({
     comPorts: Array<PortInfo>(),
     heading: 0,
     pitch: 0,
-    roll: 0
+    roll: 0,
+    rssiPercent: 0,
+    remoteRssiPercent: 0
   },
   mutations: {
     setComPorts(state, value) {
@@ -25,6 +27,12 @@ const store = new Vuex.Store({
     },
     setRoll(state, value) {
       state.roll = value
+    },
+    setRssiPercent(state, value) {
+      state.rssiPercent = value;
+    },
+    setRemoteRssiPercent(state, value) {
+      state.remoteRssiPercent = value;
     }
   }
 })
