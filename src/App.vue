@@ -1,22 +1,27 @@
 <template>
   <v-app>
     <v-content>
-      <SailboatGcs/>
+      <SailboatGcs />
     </v-content>
   </v-app>
 </template>
 
 <script lang="ts">
-import Vue from 'vue';
-import SailboatGcs from './components/SailboatGcs.vue';
+import Vue from "vue";
+import SailboatGcs from "./components/SailboatGcs.vue";
 
 export default Vue.extend({
-  name: 'App',
+  name: "App",
   components: {
-    SailboatGcs,
+    SailboatGcs
   },
   data: () => ({
     //
-  }),
+  })
 });
 </script>
+<style>
+::-webkit-scrollbar {
+  display: none;
+}
+</style>

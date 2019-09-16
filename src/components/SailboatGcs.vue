@@ -1,44 +1,22 @@
 <template>
-  <v-container>
-    <v-select
-      :items="comPorts"
-      item-text="comName"
-      item-value="comName"
-      label="Port"
-      v-on:change="handleComPortChange"
-    ></v-select>
-
-    <div class="indicators">
-      <div class="signal-bars-wrapper">
-        <div class="signal-bars">
-          <div class="bars">
-            <div class="first-bar bar" v-bind:class="rssiLevel(10)"></div>
-            <div class="second-bar bar" v-bind:class="rssiLevel(30)"></div>
-            <div class="third-bar bar" v-bind:class="rssiLevel(50)"></div>
-            <div class="fourth-bar bar" v-bind:class="rssiLevel(70)"></div>
-            <div class="fifth-bar bar" v-bind:class="rssiLevel(90)"></div>
-          </div>
-          <span>RSSI</span>
-        </div>
-
-        <div class="signal-bars">
-          <div class="bars">
-            <div class="first-bar bar" v-bind:class="remoteRssiLevel(10)"></div>
-            <div class="second-bar bar" v-bind:class="remoteRssiLevel(30)"></div>
-            <div class="third-bar bar" v-bind:class="remoteRssiLevel(50)"></div>
-            <div class="fourth-bar bar" v-bind:class="remoteRssiLevel(70)"></div>
-            <div class="fifth-bar bar" v-bind:class="remoteRssiLevel(90)"></div>
-          </div>
-          <span>REMOTE RSSI</span>
-        </div>
+  <div>
+    <div class="grid-container">
+      <div class="select">
+        <v-select
+          class="select-comPorts"
+          :items="comPorts"
+          item-text="comName"
+          item-value="comName"
+          label="Port"
+          v-on:change="handleComPortChange"
+        ></v-select>
       </div>
 
-      <v-heading :size="200" :heading="heading" />
-      <v-attitude :size="200" :pitch="pitch" :roll="roll" />
+      <v-indicators class="indicators" />
+      <v-leaflet class="map" />
     </div>
-
     <v-snackbar v-model="snackbar['enabled']" :color="snackbar['color']">{{ snackbar['message'] }}</v-snackbar>
-  </v-container>
+  </div>
 </template>
 
 <script lang="ts">
@@ -49,15 +27,19 @@ import { MAVLinkModule, MAVLinkMessage } from "@ifrunistuttgart/node-mavlink";
 import Serialport, { PortInfo } from "serialport";
 import { messageRegistry } from "../assets/mavlink/message-registry";
 
-/* eslint-disable */
+// eslint-disable-next-line
 import { Heading, Attitude } from "vue-flight-indicators";
+
 import { Heartbeat } from "@/assets/mavlink/messages/heartbeat";
 import { RadioStatus } from "@/assets/mavlink/messages/radio-status";
 import { BoatStatus } from "@/assets/mavlink/messages/boat-status";
-/* eslint-enable */
+import Leaflet from "./Leaflet.vue";
+import Indicators from "./Indicators.vue";
 
 Vue.component("v-heading", Heading);
 Vue.component("v-attitude", Attitude);
+Vue.component("v-leaflet", Leaflet);
+Vue.component("v-indicators", Indicators);
 
 // Converts from degrees to radians.
 const radians = function(degrees: number) {
@@ -72,7 +54,7 @@ const degrees = function(radians: number) {
 @Component
 export default class SailboatGcs extends Vue {
   mavLink: MAVLinkModule;
-  serialPort: SerialPort;
+  serialPort: Serialport;
 
   snackbar = {
     message: "",
@@ -80,28 +62,12 @@ export default class SailboatGcs extends Vue {
     color: "success"
   };
 
-  get heading(): number {
-    return this.$store.state.heading;
-  }
-
-  get pitch(): number {
-    return this.$store.state.pitch;
-  }
-
-  get roll(): number {
-    return this.$store.state.roll;
+  get initialized(): boolean {
+    return this.$store.state.initialized;
   }
 
   get comPorts(): PortInfo[] {
     return this.$store.state.comPorts;
-  }
-
-  get rssiPercent(): number {
-    return this.$store.state.rssiPercent;
-  }
-
-  get remoteRssiPercent(): number {
-    return this.$store.state.remoteRssiPercent;
   }
 
   mounted() {
@@ -161,7 +127,7 @@ export default class SailboatGcs extends Vue {
         "setRssiPercent",
         this.mapRange(message.rssi, 0, 255, 0, 100)
       );
-      console.log(this.mapRange(message.rssi, 0, 255, 0, 100));
+
       this.$store.commit(
         "setRemoteRssiPercent",
         this.mapRange(message.remrssi, 0, 255, 0, 100)
@@ -169,19 +135,14 @@ export default class SailboatGcs extends Vue {
     });
 
     this.mavLink.on("BOAT_STATUS", (message: BoatStatus) => {
+      this.$store.commit("setLat", message.lat / 10000000);
+      this.$store.commit("setLon", message.lon / 10000000);
       this.$store.commit("setHeading", message.heading);
       this.$store.commit("setPitch", message.pitch);
       this.$store.commit("setRoll", message.roll);
+      this.$store.commit("setSpeed", message.speed);
+      this.$store.commit("setInitialized");
     });
-  }
-
-  rssiLevel(level: number): string {
-    console.log(this.rssiPercent, level, this.rssiPercent > level);
-    return this.rssiPercent > level ? "visible" : "invisible";
-  }
-
-  remoteRssiLevel(level: number): string {
-    return this.remoteRssiPercent > level ? "visible" : "invisible";
   }
 
   mapRange = (
@@ -220,60 +181,50 @@ export default class SailboatGcs extends Vue {
 }
 </script>
 
-<style lang="scss">
-$signal-strength-bar-height: 50px;
-$signal-strength-bar-width: 80px;
+<style scoped lang="scss">
 
-.visible {
-  display: inline-block !important;
+.container {
+  width: 100%;
+  height: 100%;
 }
 
-.invisible {
-  display: none !important;
+.grid-container {
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 5fr;
+  grid-template-rows: 1fr 10fr;
+  grid-template-areas:
+    ". select"
+    "indicators map";
+}
+
+.map {
+  grid-area: map;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.select {
+  grid-area: select;
+  width: 100%;
+  height: 100%;
+}
+
+.indicators {
+  grid-area: indicators;
+  width: 100%;
+  height: 100%;
+}
+
+.select-comPorts {
+  width: 200px;
 }
 
 .indicators {
   display: flex;
   flex-direction: column;
-}
-
-.signal-bars-wrapper {
-  display: flex;
-  flex-direction: row;
-}
-
-.signal-bars {
-  display: flex;
-  flex-direction: column;
-}
-
-.bars {
-  display: inline-block;
-  height: $signal-strength-bar-height;
-  width: $signal-strength-bar-width;
-}
-.bars .bar {
-  width: 14%;
-  margin-left: 1%;
-  min-height: 20%;
-  display: inline-block;
-}
-.bars .bar.first-bar {
-  height: 20%;
-}
-.bars .bar.second-bar {
-  height: 40%;
-}
-.bars .bar.third-bar {
-  height: 60%;
-}
-.bars .bar.fourth-bar {
-  height: 80%;
-}
-.bars .bar.fifth-bar {
-  height: 100%;
-}
-.bar {
-  background-color: #2196f3;
 }
 </style>
