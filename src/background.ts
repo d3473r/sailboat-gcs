@@ -61,6 +61,7 @@ app.on('ready', async () => {
     try {
       await installVueDevtools()
     } catch (e) {
+      // eslint-disable-next-line
       console.error('Vue Devtools failed to install:', e.toString())
     }
   }
