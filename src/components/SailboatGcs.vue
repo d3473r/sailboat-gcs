@@ -3,6 +3,7 @@
     <div class="grid-container">
       <div class="select">
         <v-select
+          v-if="mapMode === 'edit'"
           class="select-comPorts"
           :items="comPorts"
           item-text="comName"
@@ -10,6 +11,8 @@
           label="Port"
           v-on:change="handleComPortChange"
         ></v-select>
+        <div v-else></div>
+
         <v-dialog v-model="dialog" v-if="mapMode === 'edit'">
           <template v-slot:activator="{ on }">
             <v-btn color="primary" dark v-on="on">Open waypoint replay</v-btn>
@@ -30,7 +33,7 @@
       </div>
 
       <v-indicators class="indicators" />
-      <v-leaflet class="map" ref="map" :mapMode="mapMode" />
+      <v-leaflet class="map" ref="leaflet" :mapMode="mapMode" />
     </div>
     <v-snackbar v-model="snackbar['enabled']" :color="snackbar['color']">{{ snackbar['message'] }}</v-snackbar>
   </div>
@@ -463,11 +466,15 @@ export default class SailboatGcs extends Vue {
     return this.$store.state.replayInterval;
   }
 
+  get mapObject(): any {
+    return this.$store.state.mapObject;
+  }
+
   openWaypointReplay() {
     this.dialog = false;
     this.mapMode = Modes.REPLAY;
     this.parseWaypoints();
-    this.$refs.map.reset();
+    this.$refs.leaflet.reset();
   }
 
   closeWaypointReplay() {
@@ -480,8 +487,14 @@ export default class SailboatGcs extends Vue {
     parse(this.waypointText, {
       complete: (result: any) => {
         const replayWaypoints: Array<ReplayWaypoint> = [];
-        this.$store.commit("setLat", result.data[0][1]);
-        this.$store.commit("setLon", result.data[0][2]);
+
+        const boatPosition = {
+          lat: result.data[0][1],
+          lng: result.data[0][2]
+        };
+
+        this.$store.commit("setBoatPosition", boatPosition);
+
         result.data.forEach(elem => {
           replayWaypoints.push(
             new ReplayWaypoint({
@@ -563,8 +576,10 @@ export default class SailboatGcs extends Vue {
     });
 
     this.mavLink.on("BOAT_STATUS", (message: BoatStatus) => {
-      this.$store.commit("setLat", message.lat / 10000000);
-      this.$store.commit("setLon", message.lon / 10000000);
+      this.$store.commit("setBoatPosition", {
+        lat: message.lat / 10000000,
+        lng: message.lon / 10000000
+      });
       this.$store.commit("setHeading", message.heading);
       this.$store.commit("setPitch", message.pitch);
       this.$store.commit("setRoll", message.roll);
@@ -616,8 +631,8 @@ export default class SailboatGcs extends Vue {
 }
 
 .grid-container {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   padding: 8px;
   display: grid;
   grid-template-columns: 1fr 5fr;

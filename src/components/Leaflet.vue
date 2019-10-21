@@ -4,9 +4,8 @@
       class="leaflet-map"
       ref="map"
       :zoom="zoom"
-      :center="center"
       @update:zoom="zoomUpdated"
-      @update:center="centerUpdated"
+      @dragend="dragMap"
       @click="handleMapClick"
     >
       <l-tile-layer :url="url"></l-tile-layer>
@@ -58,13 +57,14 @@
       </div>
     </l-map>
     <v-icon large v-if="!snapOnBoat" class="snapOnBoat" @click="clickSnapOnBoat">mdi-crosshairs</v-icon>
-    <slider v-if="mapMode === 'replay'"></slider>
+    <span v-if="mapMode === 'replay'" class="replayTimestamp">{{ replayTimestampFormatted }}</span>
+    <slider v-if="mapMode === 'replay'" class="slider"></slider>
   </div>
 </template>
 
 <script lang="ts">
 import Vue from "vue";
-import { Component, Prop } from "vue-property-decorator";
+import { Component, Prop, Watch } from "vue-property-decorator";
 import {
   LMap,
   LTileLayer,
@@ -79,7 +79,7 @@ import Slider from "./Slider.vue";
 import Vue2LeafletTracksymbol from "../assets/js/Vue2LeafletTracksymbol";
 import { Modes } from "../models/modes";
 import { ReplayWaypoint } from "../models/replayWaypoint";
-import { isBefore } from "date-fns";
+import { isBefore, format } from "date-fns";
 const uuidv4 = require("uuid/v4");
 
 Vue.component("l-map", LMap);
@@ -93,14 +93,9 @@ Vue.component("slider", Slider);
 
 @Component
 export default class Leaflet extends Vue {
-  @Prop(String) readonly mapMode: Modes;
+  @Prop(String) readonly mapMode?: Modes;
   url = "https://{s}.tile.osm.org/{z}/{x}/{y}.png";
   zoom = 14;
-  manualCenter = {
-    lat: 0,
-    lng: 0
-  };
-  snapOnBoat = true;
   polyline = {
     uuids: [],
     latlngs: [],
@@ -147,15 +142,12 @@ export default class Leaflet extends Vue {
     iconAnchor: [12, 12]
   });
 
-  get boatPosition() {
-    return {
-      lat: this.$store.state.lat,
-      lng: this.$store.state.lon
-    };
+  get mapObject() {
+    return this.$store.state.mapObject;
   }
 
-  get center() {
-    return this.snapOnBoat ? this.boatPosition : this.manualCenter;
+  get boatPosition() {
+    return this.$store.state.boatPosition;
   }
 
   get replayWaypoints(): Array<ReplayWaypoint> {
@@ -164,6 +156,24 @@ export default class Leaflet extends Vue {
 
   get replayTimestamp(): Date {
     return this.$store.state.replayTimestamp;
+  }
+
+  get snapOnBoat(): boolean {
+    return this.$store.state.snapOnBoat;
+  }
+
+  @Watch('replayTimestamp')
+  onReplayTimestampChanged(val: Date, oldVal: Date) {
+    const boatPosition = this.activeReplayWaypoints[this.activeReplayWaypoints.length - 1].latlng;
+    this.$store.commit("setBoatPosition", boatPosition);
+  }
+
+  get replayTimestampFormatted(): String {
+    if (this.replayTimestamp === undefined) {
+      return "";
+    } else {
+      return format(this.replayTimestamp, "dd.MM.yyyy HH:mm:ss");
+    }
   }
 
   get activeReplayWaypoints(): Array<ReplayWaypoint> {
@@ -178,11 +188,13 @@ export default class Leaflet extends Vue {
     return activeReplayWaypoints;
   }
 
+  mounted() {
+    this.$store.commit("setMapObject", this.$refs.map);
+  }
+
   clickSnapOnBoat() {
-    this.snapOnBoat = true;
-    setTimeout(() => {
-      this.snapOnBoat = true;
-    }, 200);
+    this.$store.commit("setSnapOnBoat", true);
+    this.mapObject.setCenter(this.boatPosition);
   }
 
   reset() {
@@ -197,9 +209,8 @@ export default class Leaflet extends Vue {
     this.zoom = zoom;
   }
 
-  centerUpdated(center: any) {
-    this.snapOnBoat = false;
-    this.manualCenter = center;
+  dragMap(center: any) {
+    this.$store.commit("setSnapOnBoat", false);
   }
 
   isFirstMarker(id: number) {
@@ -303,7 +314,22 @@ export default class Leaflet extends Vue {
 .snapOnBoat {
   cursor: pointer;
   position: absolute;
-  bottom: 32px;
+  bottom: 48px;
+  right: 8px;
+  z-index: 10;
+}
+
+.replayTimestamp {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+.slider {
+  position: absolute;
+  bottom: 0px;
+  left: 8px;
   right: 8px;
   z-index: 10;
 }

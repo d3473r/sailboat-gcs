@@ -3,8 +3,12 @@ import App from './App.vue'
 import store from './store'
 import vuetify from './plugins/vuetify';
 import 'leaflet/dist/leaflet.css'
-const debugMenu = require('debug-menu');
-debugMenu.install();
+const isDevelopment = process.env.NODE_ENV !== 'production'
+
+if (isDevelopment) {
+  const debugMenu = require('debug-menu');
+  debugMenu.install();
+}
 
 import L from 'leaflet';
 

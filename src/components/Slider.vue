@@ -1,14 +1,8 @@
 <template>
   <div class="sliderWrapper">
-    <div class="iconWrapper">
-      <v-icon large v-if="!playing" @click="clickPlay">mdi-play</v-icon>
-      <v-icon large v-if="playing" @click="clickPause">mdi-pause</v-icon>
-    </div>
-    <v-slider
-      :max="replayLength"
-      @change="changeSlider"
-      :value="sliderValue"
-    ></v-slider>
+    <v-icon large v-if="!playing" @click="clickPlay">mdi-play</v-icon>
+    <v-icon large v-if="playing" @click="clickPause">mdi-pause</v-icon>
+    <v-slider :max="replayLength" @change="changeSlider" :value="sliderValue" class="v-slider"></v-slider>
   </div>
 </template>
 
@@ -73,7 +67,7 @@ export default class Slider extends Vue {
     }
     const interval = setInterval(() => {
       if (this.sliderValue === this.replayLength) {
-        clearInterval(this.replayInterval);
+        this.clickPause();
       } else {
         if (this.replayTimestamp !== undefined) {
           this.$store.commit(
@@ -81,7 +75,6 @@ export default class Slider extends Vue {
             addSeconds(this.replayTimestamp, 1)
           );
           this.sliderValue++;
-          console.log(this.replayTimestamp);
         }
       }
     }, 1000);
@@ -98,12 +91,10 @@ export default class Slider extends Vue {
 <style scoped lang="scss">
 .sliderWrapper {
   display: flex;
-  align-items: stretch;
+  align-items: flex-end;
 }
 
-.iconWrapper {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
+.v-slider {
+  padding-left: 16px;
 }
 </style>
