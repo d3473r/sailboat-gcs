@@ -5,6 +5,9 @@
         <v-select
           v-if="mapMode === 'edit'"
           class="select-comPorts"
+          ref="selectComPorts"
+          clearable
+          @click:clear="handleSelectCloseClick"
           :items="comPorts"
           item-text="comName"
           item-value="comName"
@@ -33,7 +36,12 @@
       </div>
 
       <v-indicators class="indicators" />
-      <v-leaflet class="map" ref="leaflet" :mapMode="mapMode" />
+      <v-leaflet
+        class="map"
+        ref="leaflet"
+        :mapMode="mapMode"
+        v-on:upload-waypoints="uploadWaypoints"
+      />
     </div>
     <v-snackbar v-model="snackbar['enabled']" :color="snackbar['color']">{{ snackbar['message'] }}</v-snackbar>
   </div>
@@ -49,11 +57,14 @@ import { Heading, Attitude } from "vue-flight-indicators";
 import { Heartbeat } from "@/assets/mavlink/messages/heartbeat";
 import { RadioStatus } from "@/assets/mavlink/messages/radio-status";
 import { BoatStatus } from "@/assets/mavlink/messages/boat-status";
+import { MissionRequestInt } from "@/assets/mavlink/messages/mission-request-int";
 import Leaflet from "./Leaflet.vue";
 import Indicators from "./Indicators.vue";
 import { Modes } from "../models/modes";
 import { parse } from "papaparse";
 import { ReplayWaypoint } from "../models/replayWaypoint";
+import { MissionCount } from "../assets/mavlink/messages/mission-count";
+import { MissionItemInt } from "../assets/mavlink/messages/mission-item-int";
 
 Vue.component("v-heading", Heading);
 Vue.component("v-attitude", Attitude);
@@ -74,6 +85,7 @@ const degrees = function(radians: number) {
 export default class SailboatGcs extends Vue {
   mavLink?: MAVLinkModule;
   serialPort?: Serialport;
+  connectionOpen: boolean = false;
 
   dialog = false;
   waypointText = `2019-05-24T10:43:13.304711,60.1048155,19.946052
@@ -447,6 +459,7 @@ export default class SailboatGcs extends Vue {
 2019-05-24T10:49:22.322180,60.104838,19.948822166666666
 2019-05-24T10:49:23.310135,60.10483683333333,19.948816666666666`;
   mapMode = Modes.EDIT;
+  mission: any;
 
   snackbar = {
     message: "",
@@ -516,13 +529,44 @@ export default class SailboatGcs extends Vue {
   }
 
   sendHeartbeat() {
-    const heartbeat: Heartbeat = new Heartbeat(255, 0);
+    this.sendMavlinkMessage(new Heartbeat(255, 0));
+  }
+
+  uploadWaypoints(waypoints: any) {
+    this.mission = waypoints.geometry.coordinates;
+    const missionCount = new MissionCount(255, 0);
+    missionCount.count = waypoints.geometry.coordinates.length;
+    this.sendMavlinkMessage(missionCount);
+  }
+
+  sendMavlinkMessage(message: MAVLinkMessage) {
     const messages: MAVLinkMessage[] = Array<MAVLinkMessage>();
-    messages.push(heartbeat);
+    messages.push(message);
+    this.sendMavlinkMessages(messages);
+  }
+
+  sendMavlinkMessages(messages: MAVLinkMessage[]) {
     this.serialPort.write(this.mavLink.pack(messages));
   }
 
+  handleSelectCloseClick() {
+    this.closeSerialPort();
+    this.connectionOpen = false;
+  }
+
+  logBuffer(buffer: Buffer) {
+    let s = "";
+    for (let byte of buffer) {
+      s += "0x" + byte.toString(16).toLowerCase() + ", ";
+    }
+    s = s.substring(0, s.length - 2);
+    console.log(s);
+  }
+
   handleComPortChange(comPort: string) {
+    if (!comPort) {
+      return;
+    }
     if (this.mavLink === undefined) {
       this.mavLink = new MAVLinkModule(messageRegistry, 255, false);
       this.mavLink.upgradeLink();
@@ -539,15 +583,17 @@ export default class SailboatGcs extends Vue {
     }, 1000);
 
     this.serialPort.on("open", (_: any) => {
+      this.connectionOpen = true;
       this.success(`Connection with port ${comPort} opened`);
     });
 
     this.serialPort.on("error", (e: Error) => {
+      this.connectionOpen = false;
       this.error(`Error communicating with port ${comPort}: ${e}`);
     });
 
     this.serialPort.on("data", (data: Buffer) => {
-      // console.log(data.toString('hex'))
+      // this.logBuffer(data);
       this.mavLink.parse(data);
     });
 
@@ -585,6 +631,16 @@ export default class SailboatGcs extends Vue {
       this.$store.commit("setRoll", message.roll);
       this.$store.commit("setSpeed", message.speed);
       this.$store.commit("setInitialized");
+    });
+
+    this.mavLink.on("MISSION_REQUEST_INT", (message: MissionRequestInt) => {
+      const missionItemInt = new MissionItemInt(255, 0);
+      // Use count, seq seems buggy
+      const item = this.mission[message.count]
+      missionItemInt.count = message.count;
+      missionItemInt.lat = item[0] * 10000000;
+      missionItemInt.lon = item[1] * 10000000;
+      this.sendMavlinkMessage(missionItemInt);
     });
   }
 

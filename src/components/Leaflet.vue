@@ -26,16 +26,22 @@
               <v-icon dark right>save</v-icon>
             </v-btn>
           </div>
-          <div v-on:click="handleDeleteClick($event, item.id)">
-            <v-btn color="red" dark class="popup-button">
-              Delete
-              <v-icon dark right>delete</v-icon>
+          <div v-on:click="handleUploadClick">
+            <v-btn color="deep-purple" dark class="popup-button">
+              Upload
+              <v-icon dark right>send</v-icon>
             </v-btn>
           </div>
           <div v-if="showCyclic(item.id)" v-on:click="handleCyclicClick">
             <v-btn color="green" dark class="popup-button">
               Cyclic
               <v-icon dark right>refresh</v-icon>
+            </v-btn>
+          </div>
+          <div v-on:click="handleDeleteClick($event, item.id)">
+            <v-btn color="red" dark class="popup-button">
+              Delete
+              <v-icon dark right>delete</v-icon>
             </v-btn>
           </div>
         </l-popup>
@@ -80,6 +86,7 @@ import Vue2LeafletTracksymbol from "../assets/js/Vue2LeafletTracksymbol";
 import { Modes } from "../models/modes";
 import { ReplayWaypoint } from "../models/replayWaypoint";
 import { isBefore, format } from "date-fns";
+import { Polyline } from 'leaflet';
 const uuidv4 = require("uuid/v4");
 
 Vue.component("l-map", LMap);
@@ -93,19 +100,23 @@ Vue.component("slider", Slider);
 
 @Component
 export default class Leaflet extends Vue {
+  $refs!: {
+    polyline: any,
+    map: any
+  }
   @Prop(String) readonly mapMode?: Modes;
   url = "https://{s}.tile.osm.org/{z}/{x}/{y}.png";
   zoom = 14;
   polyline = {
-    uuids: [],
-    latlngs: [],
+    uuids: [] as  any,
+    latlngs: [] as  any,
     color: "blue"
   };
   polylineCycle = {
     latlngs: [],
     color: "green"
   };
-  markers = [];
+  markers = [] as  any;
   cyclic = false;
   boatOptions = {
     trackId: 1,
@@ -255,7 +266,7 @@ export default class Leaflet extends Vue {
     }
   }
 
-  handleMarkerDrag(event: Event, id: number) {
+  handleMarkerDrag(event: any, id: number) {
     const index = this.polyline.uuids.indexOf(id);
     Vue.set(this.polyline.latlngs, index, event.target._latlng);
     if (this.needUpdateCyclic(id)) {
@@ -274,6 +285,11 @@ export default class Leaflet extends Vue {
       type: "application/json"
     });
     FileSaver.saveAs(blob, "waypoints.json");
+    this.$refs.map.mapObject.closePopup();
+  }
+
+  handleUploadClick() {
+    this.$emit('upload-waypoints', this.$refs.polyline.mapObject.toGeoJSON());
     this.$refs.map.mapObject.closePopup();
   }
 
